@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from .const import MAX_LIST
 
 if TYPE_CHECKING:
-    from .api import Event, Schedule, Search, SearchHit, Sources
+    from .api import Event, Message, Schedule, Search, SearchHit, Sources
 
 Lang = Literal["sv", "en"]
 
@@ -25,6 +25,7 @@ TEXTS = {
         "months": ["jan", "feb", "mars", "apr", "maj", "juni", "juli", "aug", "sep", "okt", "nov", "dec"],
         "today": "i dag",
         "tomorrow": "i morgon",
+        "day_after_tomorrow": "i övermorgon",
         "in_days": lambda days: f"om {days} dagar",
         "estimated": "beräknat",
         "none": "Inga kommande hämtningar",
@@ -34,12 +35,14 @@ TEXTS = {
         "added": lambda name, date: f"{name} hämtas {date}",
         "estimated_date": "Beräknat datum.",
         "moved_from": lambda date, reason: _moved_line("Flyttad", "från", date, reason),
+        "read_more": "Läs mer hos källan",
     },
     "en": {
         "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
         "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
         "today": "today",
         "tomorrow": "tomorrow",
+        "day_after_tomorrow": "in 2 days",
         "in_days": lambda days: f"in {days} days",
         "estimated": "estimated",
         "none": "No upcoming collections",
@@ -49,6 +52,7 @@ TEXTS = {
         "added": lambda name, date: f"{name} is collected on {date}",
         "estimated_date": "Estimated date.",
         "moved_from": lambda date, reason: _moved_line("Moved", "from", date, reason),
+        "read_more": "Read more from the source",
     },
 }
 
@@ -84,6 +88,8 @@ def relative_day_label(days: int, lang: Lang = "sv") -> str:
         return t["today"]
     if days == 1:
         return t["tomorrow"]
+    if days == 2:
+        return t["day_after_tomorrow"]
     return t["in_days"](days)
 
 
@@ -310,3 +316,15 @@ def event_description(event: Event, lang: Lang = "sv") -> str:
         original = deviation["originalDate"]
         lines.append(t["moved_from"](short_date(original, lang) if original else None, deviation["reason"]))
     return "\n".join(lines)
+
+
+def active_messages(schedule: Schedule, today: str) -> list[Message]:
+    """Källans meddelanden som gäller i dag. Svaret kan vara upp till sex timmar gammalt, så datumen kontrolleras här."""
+    return [m for m in schedule.get("messages", []) if m["validFrom"] <= today <= m["validTo"]]
+
+
+def message_text(message: Message, lang: Lang = "sv") -> str:
+    """Meddelandets text, med länken till källans sida som Markdown när den finns."""
+    if not message["url"]:
+        return message["text"]
+    return f"{message['text']}\n\n[{TEXTS[lang]['read_more']}]({message['url']})"
